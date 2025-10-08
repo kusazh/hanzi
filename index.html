@@ -1,50 +1,89 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-Hant">
 
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>合成大汉字</title>
+  <title>合成大漢字</title>
   <style>
     body {
-      width: 400px;
-      max-width: 100%;
-      margin: 0 auto;
       font-family: serif;
+      margin: 0 auto;
+      max-width: 100%;
+      width: 400px;
     }
 
-    .hud {
-      margin: 20px 10px 0 10px;
+    body * {
+      color: inherit;
+      line-height: 1;
+    }
+
+    h1 {
+      left: 10px;
+      right: 0;
+
+      font-size: initial;
+      letter-spacing: 10px;
+      margin: 0 auto;
+      position: fixed;
+      width: fit-content;
+    }
+
+    div {
       display: flex;
+      margin: 20px 10px 0px 10px;
       justify-content: space-between;
     }
 
     canvas {
       outline-offset: -10px;
     }
+
+    footer {
+      text-align: center;
+    }
+
+    a {
+      color: inherit;
+      text-underline-offset: 5px;
+    }
   </style>
 </head>
 
 <body>
-  <div class="hud">
-    <button id="btnReset">重置</button>
-    <span id="score">0</span>
+  <h1>合成大漢字</h1>
+  <div>
+    <button id="btnReset">重開</button>
+    <a class="github-button" href="https://github.com/kusazh/hanzi"
+      data-color-scheme="no-preference: light; light: light; dark: dark;" data-icon="octicon-star"
+      aria-label="Star kusazh/hanzi on GitHub">
+      星
+    </a>
   </div>
   <canvas id="game"></canvas>
+  <footer>
+    <a href="../me">張苦洒</a>
+  </footer>
   <script src="https://cdn.jsdelivr.net/npm/matter-js@latest/build/matter.min.js"></script>
   <script src="https://unpkg.com/opentype.js@latest/dist/opentype.min.js"></script>
   <script>
+    // TODO: 字典，字号，游戏结束，计算最大汉字
     const { Body, Bodies, Composite, Engine, Events, Render, Runner, Svg, World } = Matter;
-    const canvas = document.getElementById("game");
 
-    let W, H;
-    function resize() {
-      canvas.width = W = Math.min(window.innerWidth, 400);
-      canvas.height = H = W * 1.6;
-      canvas.style.outline = "1px solid black";
-    }
-    window.addEventListener("resize", resize);
-    resize();
+    const thickness = 20;
+    const w = Math.min(window.innerWidth, 400);
+    const h = w * 1.6;
+    const fontSize = w * 0.3;
+    const svgs = {};
+    let font, preview;
+    let hanzis = [];
+    let isDragging = false;
+
+    const canvas = document.getElementById("game");
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = w;
+    canvas.height = h;
+    canvas.style.outline = "1px solid rgba(0, 0, 0, 0.2)";
 
     let engine = Engine.create();
     let world = engine.world;
@@ -54,8 +93,8 @@
       canvas: canvas,
       engine: engine,
       options: {
-        width: W,
-        height: H,
+        width: w,
+        height: h,
         wireframes: false,  // true
         background: "white",
       }
@@ -63,28 +102,18 @@
     Render.run(render);
     Runner.run(Runner.create(), engine);
 
-    // 边界
-    const ground = Bodies.rectangle(W / 2, H, W, 20, { isStatic: true, render: { visible: false } });
-    const wallL = Bodies.rectangle(0, H / 2, 20, H, { isStatic: true, render: { visible: false } });
-    const wallR = Bodies.rectangle(W, H / 2, 20, H, { isStatic: true, render: { visible: false } });
+    const ground = Bodies.rectangle(w / 2, h, w, thickness, { isStatic: true, render: { visible: false } });
+    const wallL = Bodies.rectangle(0, h / 2, thickness, h, { isStatic: true, render: { visible: false } });
+    const wallR = Bodies.rectangle(w, h / 2, thickness, h, { isStatic: true, render: { visible: false } });
     World.add(world, [ground, wallL, wallR]);
 
-    // 分数
-    let score = 0;
-    const scoreEl = document.getElementById("score");
-
-    let hanzis = [];
-    const svgs = {};
-
-    let font = null;
-
-    opentype.load("SourceHanSerifSC-Heavy.otf", function (err, f) {
+    opentype.load("./SourceHanSerifTC-Heavy.otf", function (err, f) {
       if (err) return console.error(err);
       font = f;
     });
 
     function genSvg(text) {
-      const path = font.getPath(text, 0, 0, 0.3 * W);
+      const path = font.getPath(text, 0, 0, fontSize);
       let minX = 0, minY = 0, maxX = 0, maxY = 0;
 
       path.commands.forEach(cmd => {
@@ -110,76 +139,85 @@
       return [vertices, svgUrl];
     }
 
-    function spawn(x) {
-      const text = "我";
+    function genBody(text, x, y = null, isPreview = false) {
       let vertices, svgUrl;
-
       if (text in svgs) {
         [vertices, svgUrl] = svgs[text];
       } else {
         [vertices, svgUrl] = genSvg(text);
         svgs[text] = [vertices, svgUrl];
       }
-
-      let body = Bodies.fromVertices(x, 60, vertices, {
+      y = y ?? fontSize / 2 + thickness / 2;
+      x = Math.min(x, w - fontSize / 2 - thickness / 2);
+      x = Math.max(x, fontSize / 2 + thickness / 2);
+      let body = Bodies.fromVertices(x, y, vertices, {
+        isStatic: isPreview,
+        isSensor: isPreview,
         restitution: 0.2,
         friction: 0.1,
         render: { sprite: { texture: svgUrl } }
       }, true);
-      body.text = text;
+      if (isPreview) {
+        body.previewText = text;
+      } else {
+        body.text = text;
+      }
+      return body
+    }
+
+    function mergeHanzi(a, b) {
+      const x = (a.position.x + b.position.x) / 2;
+      const y = (a.position.y + b.position.y) / 2;
+      let body = genBody("你", x, y);
+      World.remove(world, [a, b]);
+      hanzis = hanzis.filter(f => f !== a && f !== b);
       hanzis.push(body);
       World.add(world, body);
     }
 
-    // 点击事件
     canvas.addEventListener("pointerdown", e => {
-      const rect = canvas.getBoundingClientRect();
-      const x = (e.clientX - rect.left) * (W / rect.width);
-      spawn(x);
+      isDragging = true;
+
+      const x = (e.clientX - rect.left) * (w / rect.width);
+      canvas.setPointerCapture(e.pointerId);
+      preview = genBody("我", x, null, true);
     });
 
-    // 碰撞事件 → 合并逻辑
-    // Events.on(engine, "collisionStart", event => {
-    //   let pairs = event.pairs;
-    //   for (let pair of pairs) {
-    //     let a = pair.bodyA, b = pair.bodyB;
-    //     if (a.fruitType && b.fruitType && a.fruitType === b.fruitType) {
-    //       mergeFruits(a, b);
-    //     }
-    //   }
-    // });
+    canvas.addEventListener("pointermove", e => {
+      if (!isDragging) return;
 
-    // function mergeFruits(a, b) {
-    //   // 新水果位置取平均
-    //   const nx = (a.position.x + b.position.x) / 2;
-    //   const ny = (a.position.y + b.position.y) / 2;
-    //   const newType = Math.min(MAX_TYPE, a.fruitType + 1);
-    //   const nr = BASE_RADIUS * (1 + (newType - 1) * 0.15);
-    //   let nf = Bodies.circle(nx, ny, nr, {
-    //     restitution: 0.2,
-    //     friction: 0.1,
-    //   });
-    //   nf.fruitType = newType;
-    //   // 删除旧水果
-    //   World.remove(world, [a, b]);
-    //   fruits = fruits.filter(f => f !== a && f !== b);
-    //   // 添加新水果
-    //   fruits.push(nf);
-    //   World.add(world, nf);
-    //   // 分数
-    //   score += Math.pow(2, newType) * 5;
-    //   scoreEl.textContent = score;
-    // }
+      const x = (e.clientX - rect.left) * (w / rect.width);
+      World.remove(world, preview);
+      preview = genBody(preview.previewText, x, null, true);
+      World.add(world, preview);
+    });
 
-    // 重置按钮
+    canvas.addEventListener("pointerup", e => {
+      isDragging = false;
+
+      const x = (e.clientX - rect.left) * (w / rect.width);
+      let body = genBody(preview.previewText, x, null);
+      World.remove(world, preview);
+      hanzis.push(body);
+      World.add(world, body);
+    });
+
+    Events.on(engine, "collisionStart", e => {
+      let pairs = e.pairs;
+      for (let pair of pairs) {
+        let a = pair.bodyA, b = pair.bodyB;
+        if (a.text && b.text) {
+          mergeHanzi(a, b);
+        }
+      }
+    });
+
     document.getElementById("btnReset").onclick = () => {
       hanzis.forEach(f => World.remove(world, f));
       hanzis = [];
-      score = 0;
-      scoreEl.textContent = 0;
     };
-
   </script>
+  <script async defer src="https://buttons.github.io/buttons.js"></script>
 </body>
 
 </html>
