@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>合成大汉字</title>
+  <style>
+    body {
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-family: serif;
+    }
+
+    .hud {
+      margin: 10px;
+      display: flex;
+      justify-content: space-between;
+      width: 800px;
+      max-width: 95%;
+    }
+
+    .score {
+      font-weight: bold;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="hud">
+    <button id="btnReset">重置</button>
+    <div class="score">分数：<span id="score">0</span></div>
+  </div>
+  <canvas id="game"></canvas>
+  <script src="https://cdn.jsdelivr.net/npm/matter-js@latest/build/matter.min.js"></script>
+  <script src="https://unpkg.com/opentype.js@latest/dist/opentype.min.js"></script>
+  <script>
+    let font = null;
+
+    opentype.load("SourceHanSerifSC-Heavy.otf", function (err, f) {
+      if (err) return console.error(err);
+      font = f;
+    });
+
+    const { Body, Bodies, Composite, Engine, Events, Render, Runner, Svg, World } = Matter;
+
+    const W = 800, H = 900;
+    const canvas = document.getElementById("game");
+    canvas.width = W;
+    canvas.height = H;
+
+    let engine = Engine.create();
+    let world = engine.world;
+    world.gravity.y = 1;
+
+    let render = Render.create({
+      canvas: canvas,
+      engine: engine,
+      options: {
+        width: W,
+        height: H,
+        wireframes: false,  // true
+        background: "white",
+      }
+    });
+    Render.run(render);
+    Runner.run(Runner.create(), engine);
+
+    // 边界
+    const ground = Bodies.rectangle(W / 2, H - 20, W, 40, { isStatic: true });
+    const wallL = Bodies.rectangle(0, H / 2, 40, H, { isStatic: true });
+    const wallR = Bodies.rectangle(W, H / 2, 40, H, { isStatic: true });
+    World.add(world, [ground, wallL, wallR]);
+
+    // 分数
+    let score = 0;
+    const scoreEl = document.getElementById("score");
+
+    let hanzis = [];
+    const svgs = {};
+
+    function genSvg(text) {
+      const path = font.getPath(text, 0, 0, 200);
+      let minX = 0, minY = 0, maxX = 0, maxY = 0;
+
+      path.commands.forEach(cmd => {
+        if ("x" in cmd && "y" in cmd) {
+          const x = Math.round(cmd.x * 100) / 100;
+          const y = Math.round(cmd.y * 100) / 100;
+          if (x < minX) minX = x;
+          if (y < minY) minY = y;
+          if (x > maxX) maxX = x;
+          if (y > maxY) maxY = y;
+        }
+      });
+      const svgString = `
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX} ${minY} ${maxX - minX} ${maxY - minY}">
+          <path d="${path.toPathData(2)}" fill="black"/>
+        </svg>
+      `;
+      const mediaType = "image/svg+xml";
+      const doc = new DOMParser().parseFromString(svgString, mediaType);
+      const vertices = Svg.pathToVertices(doc.querySelector("path"), 15);
+      const svgBlob = new Blob([svgString], { type: mediaType });
+      const svgUrl = URL.createObjectURL(svgBlob);
+      return [vertices, svgUrl];
+    }
+
+    function spawn(x) {
+      const text = "我";
+      let vertices, svgUrl;
+
+      if (text in svgs) {
+        [vertices, svgUrl] = svgs[text];
+      } else {
+        [vertices, svgUrl] = genSvg(text);
+        svgs[text] = [vertices, svgUrl];
+      }
+
+      let body = Bodies.fromVertices(x, 60, vertices, {
+        restitution: 0.2,
+        friction: 0.1,
+        render: { sprite: { texture: svgUrl, xScale: 1, yScale: 1 } }
+      }, true);
+      body.text = text;
+      hanzis.push(body);
+      World.add(world, body);
+    }
+
+    // 点击事件
+    canvas.addEventListener("pointerdown", e => {
+      const rect = canvas.getBoundingClientRect();
+      const x = (e.clientX - rect.left) * (W / rect.width);
+      spawn(x);
+    });
+
+    // 碰撞事件 → 合并逻辑
+    // Events.on(engine, "collisionStart", event => {
+    //   let pairs = event.pairs;
+    //   for (let pair of pairs) {
+    //     let a = pair.bodyA, b = pair.bodyB;
+    //     if (a.fruitType && b.fruitType && a.fruitType === b.fruitType) {
+    //       mergeFruits(a, b);
+    //     }
+    //   }
+    // });
+
+    // function mergeFruits(a, b) {
+    //   // 新水果位置取平均
+    //   const nx = (a.position.x + b.position.x) / 2;
+    //   const ny = (a.position.y + b.position.y) / 2;
+    //   const newType = Math.min(MAX_TYPE, a.fruitType + 1);
+    //   const nr = BASE_RADIUS * (1 + (newType - 1) * 0.15);
+    //   let nf = Bodies.circle(nx, ny, nr, {
+    //     restitution: 0.2,
+    //     friction: 0.1,
+    //   });
+    //   nf.fruitType = newType;
+    //   // 删除旧水果
+    //   World.remove(world, [a, b]);
+    //   fruits = fruits.filter(f => f !== a && f !== b);
+    //   // 添加新水果
+    //   fruits.push(nf);
+    //   World.add(world, nf);
+    //   // 分数
+    //   score += Math.pow(2, newType) * 5;
+    //   scoreEl.textContent = score;
+    // }
+
+    // 重置按钮
+    document.getElementById("btnReset").onclick = () => {
+      hanzis.forEach(f => World.remove(world, f));
+      hanzis = [];
+      score = 0;
+      scoreEl.textContent = 0;
+    };
+
+  </script>
+</body>
+
+</html>
