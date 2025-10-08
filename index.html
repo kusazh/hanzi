@@ -7,23 +7,20 @@
   <title>合成大汉字</title>
   <style>
     body {
-      margin: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+      width: 400px;
+      max-width: 100%;
+      margin: 0 auto;
       font-family: serif;
     }
 
     .hud {
-      margin: 10px;
+      margin: 20px 10px 0 10px;
       display: flex;
       justify-content: space-between;
-      width: 800px;
-      max-width: 95%;
     }
 
-    .score {
-      font-weight: bold;
+    canvas {
+      outline-offset: -10px;
     }
   </style>
 </head>
@@ -31,25 +28,23 @@
 <body>
   <div class="hud">
     <button id="btnReset">重置</button>
-    <div class="score">分数：<span id="score">0</span></div>
+    <span id="score">0</span>
   </div>
   <canvas id="game"></canvas>
   <script src="https://cdn.jsdelivr.net/npm/matter-js@latest/build/matter.min.js"></script>
   <script src="https://unpkg.com/opentype.js@latest/dist/opentype.min.js"></script>
   <script>
-    let font = null;
-
-    opentype.load("SourceHanSerifSC-Heavy.otf", function (err, f) {
-      if (err) return console.error(err);
-      font = f;
-    });
-
     const { Body, Bodies, Composite, Engine, Events, Render, Runner, Svg, World } = Matter;
-
-    const W = 800, H = 900;
     const canvas = document.getElementById("game");
-    canvas.width = W;
-    canvas.height = H;
+
+    let W, H;
+    function resize() {
+      canvas.width = W = Math.min(window.innerWidth, 400);
+      canvas.height = H = W * 1.6;
+      canvas.style.outline = "1px solid black";
+    }
+    window.addEventListener("resize", resize);
+    resize();
 
     let engine = Engine.create();
     let world = engine.world;
@@ -69,9 +64,9 @@
     Runner.run(Runner.create(), engine);
 
     // 边界
-    const ground = Bodies.rectangle(W / 2, H - 20, W, 40, { isStatic: true });
-    const wallL = Bodies.rectangle(0, H / 2, 40, H, { isStatic: true });
-    const wallR = Bodies.rectangle(W, H / 2, 40, H, { isStatic: true });
+    const ground = Bodies.rectangle(W / 2, H, W, 20, { isStatic: true, render: { visible: false } });
+    const wallL = Bodies.rectangle(0, H / 2, 20, H, { isStatic: true, render: { visible: false } });
+    const wallR = Bodies.rectangle(W, H / 2, 20, H, { isStatic: true, render: { visible: false } });
     World.add(world, [ground, wallL, wallR]);
 
     // 分数
@@ -81,8 +76,15 @@
     let hanzis = [];
     const svgs = {};
 
+    let font = null;
+
+    opentype.load("SourceHanSerifSC-Heavy.otf", function (err, f) {
+      if (err) return console.error(err);
+      font = f;
+    });
+
     function genSvg(text) {
-      const path = font.getPath(text, 0, 0, 200);
+      const path = font.getPath(text, 0, 0, 0.3 * W);
       let minX = 0, minY = 0, maxX = 0, maxY = 0;
 
       path.commands.forEach(cmd => {
@@ -122,7 +124,7 @@
       let body = Bodies.fromVertices(x, 60, vertices, {
         restitution: 0.2,
         friction: 0.1,
-        render: { sprite: { texture: svgUrl, xScale: 1, yScale: 1 } }
+        render: { sprite: { texture: svgUrl } }
       }, true);
       body.text = text;
       hanzis.push(body);
