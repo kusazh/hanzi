@@ -7,14 +7,16 @@
   <title>合成大漢字</title>
   <style>
     body {
+      background-color: white;
       font-family: serif;
       margin: 0 auto;
       max-width: 100%;
+      touch-action: none;
       width: 400px;
     }
 
     body * {
-      color: inherit;
+      color: black;
       line-height: 1;
       text-align: center;
       text-underline-offset: 5px;
@@ -37,6 +39,20 @@
       margin: 20px 10px 0px 10px;
       justify-content: space-between;
     }
+
+    @media (prefers-color-scheme: dark) {
+      body {
+        background-color: black;
+      }
+
+      body * {
+        color: white;
+      }
+
+      button {
+        color: initial;
+      }
+    }
   </style>
 </head>
 
@@ -55,7 +71,7 @@
     <a href="../me">張苦洒</a>
   </footer>
   <script src="https://cdn.jsdelivr.net/npm/matter-js@latest/build/matter.min.js"></script>
-  <script src="https://unpkg.com/opentype.js@latest/dist/opentype.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/opentype.js@latest/dist/opentype.min.js"></script>
   <script>
     // TODO: 字典，字号，游戏结束，计算最大汉字
     const { Body, Bodies, Composite, Engine, Events, Render, Runner, Svg, World } = Matter;
@@ -64,15 +80,22 @@
     const w = Math.min(window.innerWidth, 400);
     const h = w * 1.6;
     const indicator = w * 0.2;
-    const svgs = {};
     let font, preview;
+    let bColor = "white";
+    let fColor = "black";
     let hanzis = [];
+    let svgs = {};
+
+    if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+      bColor = "black";
+      fColor = "white";
+    }
 
     const canvas = document.getElementById("game");
     const rect = canvas.getBoundingClientRect();
     canvas.width = w;
     canvas.height = h;
-    canvas.style.outline = "1px solid rgba(0, 0, 0, 0.2)";
+    canvas.style.outline = "1px solid grey";
 
     let engine = Engine.create();
     let world = engine.world;
@@ -85,7 +108,7 @@
         width: w,
         height: h,
         wireframes: false,  // true
-        background: "white",
+        background: bColor,
       }
     });
     Render.run(render);
@@ -129,7 +152,7 @@
       const bodyH = maxY - minY;
       const svgString = `
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX} ${minY} ${bodyW} ${bodyH}">
-          <path d="${path.toPathData(2)}" fill="black"/>
+          <path d="${path.toPathData(2)}" fill="${fColor}"/>
         </svg>
       `;
       const mediaType = "image/svg+xml";
@@ -145,8 +168,7 @@
       if (text in svgs) {
         [bodyW, bodyH, vertices, svgUrl] = svgs[text];
       } else {
-        [bodyW, bodyH, vertices, svgUrl] = genSvg(text);
-        svgs[text] = [bodyW, bodyH, vertices, svgUrl];
+        svgs[text] = [bodyW, bodyH, vertices, svgUrl] = genSvg(text);
       }
       x = checkX(x, bodyW);
       y = y ?? bodyH / 2 + thickness / 2;
@@ -212,8 +234,10 @@
     });
 
     document.getElementById("btnReset").onclick = () => {
-      hanzis.forEach(f => World.remove(world, f));
+      hanzis.forEach(b => World.remove(world, b));
+      Object.values(svgs).forEach(data => URL.revokeObjectURL(data[3]));
       hanzis = [];
+      svgs = {};
     };
   </script>
   <script async defer src="https://buttons.github.io/buttons.js"></script>
