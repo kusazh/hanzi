@@ -16,6 +16,9 @@
     body * {
       color: inherit;
       line-height: 1;
+      text-align: center;
+      text-underline-offset: 5px;
+      outline-offset: -10px;
     }
 
     h1 {
@@ -29,37 +32,24 @@
       width: fit-content;
     }
 
-    div {
+    header {
       display: flex;
       margin: 20px 10px 0px 10px;
       justify-content: space-between;
-    }
-
-    canvas {
-      outline-offset: -10px;
-    }
-
-    footer {
-      text-align: center;
-    }
-
-    a {
-      color: inherit;
-      text-underline-offset: 5px;
     }
   </style>
 </head>
 
 <body>
   <h1>合成大漢字</h1>
-  <div>
+  <header>
     <button id="btnReset">重開</button>
     <a class="github-button" href="https://github.com/kusazh/hanzi"
       data-color-scheme="no-preference: light; light: light; dark: dark;" data-icon="octicon-star"
       aria-label="Star kusazh/hanzi on GitHub">
       星
     </a>
-  </div>
+  </header>
   <canvas id="game"></canvas>
   <footer>
     <a href="../me">張苦洒</a>
@@ -73,11 +63,10 @@
     const thickness = 20;
     const w = Math.min(window.innerWidth, 400);
     const h = w * 1.6;
-    const fontSize = w * 0.3;
+    const indicator = w * 0.2;
     const svgs = {};
     let font, preview;
     let hanzis = [];
-    let isDragging = false;
 
     const canvas = document.getElementById("game");
     const rect = canvas.getBoundingClientRect();
@@ -107,13 +96,23 @@
     const wallR = Bodies.rectangle(w, h / 2, thickness, h, { isStatic: true, render: { visible: false } });
     World.add(world, [ground, wallL, wallR]);
 
+    // TODO: loading
     opentype.load("./SourceHanSerifTC-Heavy.otf", function (err, f) {
       if (err) return console.error(err);
       font = f;
+      // showcase
+      // hanzis = [
+      //   genBody("合", w / 2, null),
+      //   genBody("成", w / 2, null),
+      //   genBody("大", w / 2, null),
+      //   genBody("漢", w / 2, null),
+      //   genBody("字", w / 2, null),
+      // ];
+      // World.add(world, hanzis);
     });
 
     function genSvg(text) {
-      const path = font.getPath(text, 0, 0, fontSize);
+      const path = font.getPath(text, 0, 0, indicator);
       let minX = 0, minY = 0, maxX = 0, maxY = 0;
 
       path.commands.forEach(cmd => {
@@ -126,8 +125,10 @@
           if (y > maxY) maxY = y;
         }
       });
+      const bodyW = maxX - minX;
+      const bodyH = maxY - minY;
       const svgString = `
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX} ${minY} ${maxX - minX} ${maxY - minY}">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX} ${minY} ${bodyW} ${bodyH}">
           <path d="${path.toPathData(2)}" fill="black"/>
         </svg>
       `;
@@ -136,20 +137,19 @@
       const vertices = Svg.pathToVertices(doc.querySelector("path"), 15);
       const svgBlob = new Blob([svgString], { type: mediaType });
       const svgUrl = URL.createObjectURL(svgBlob);
-      return [vertices, svgUrl];
+      return [bodyW, bodyH, vertices, svgUrl];
     }
 
     function genBody(text, x, y = null, isPreview = false) {
       let vertices, svgUrl;
       if (text in svgs) {
-        [vertices, svgUrl] = svgs[text];
+        [bodyW, bodyH, vertices, svgUrl] = svgs[text];
       } else {
-        [vertices, svgUrl] = genSvg(text);
-        svgs[text] = [vertices, svgUrl];
+        [bodyW, bodyH, vertices, svgUrl] = genSvg(text);
+        svgs[text] = [bodyW, bodyH, vertices, svgUrl];
       }
-      y = y ?? fontSize / 2 + thickness / 2;
-      x = Math.min(x, w - fontSize / 2 - thickness / 2);
-      x = Math.max(x, fontSize / 2 + thickness / 2);
+      x = checkX(x, bodyW);
+      y = y ?? bodyH / 2 + thickness / 2;
       let body = Bodies.fromVertices(x, y, vertices, {
         isStatic: isPreview,
         isSensor: isPreview,
@@ -157,12 +157,14 @@
         friction: 0.1,
         render: { sprite: { texture: svgUrl } }
       }, true);
-      if (isPreview) {
-        body.previewText = text;
-      } else {
-        body.text = text;
-      }
+      body[isPreview ? "previewText" : "text"] = text;
       return body
+    }
+
+    function checkX(x, bodyW) {
+      x = Math.min(x, w - bodyW / 2 - thickness / 2);
+      x = Math.max(x, bodyW / 2 + thickness / 2);
+      return x;
     }
 
     function mergeHanzi(a, b) {
@@ -176,28 +178,25 @@
     }
 
     canvas.addEventListener("pointerdown", e => {
-      isDragging = true;
-
       const x = (e.clientX - rect.left) * (w / rect.width);
       canvas.setPointerCapture(e.pointerId);
       preview = genBody("我", x, null, true);
-    });
-
-    canvas.addEventListener("pointermove", e => {
-      if (!isDragging) return;
-
-      const x = (e.clientX - rect.left) * (w / rect.width);
-      World.remove(world, preview);
-      preview = genBody(preview.previewText, x, null, true);
       World.add(world, preview);
     });
 
-    canvas.addEventListener("pointerup", e => {
-      isDragging = false;
+    canvas.addEventListener("pointermove", e => {
+      if (!preview) return;
+      const bodyW = svgs[preview.previewText][0];
+      const x = checkX((e.clientX - canvas.offsetLeft) * (w / rect.width), bodyW);
+      Body.setPosition(preview, { x: x, y: preview.position.y });
+    });
 
-      const x = (e.clientX - rect.left) * (w / rect.width);
+    canvas.addEventListener("pointerup", e => {
+      if (!preview) return;
+      const x = (e.clientX - canvas.offsetLeft) * (w / rect.width);
       let body = genBody(preview.previewText, x, null);
       World.remove(world, preview);
+      preview = null;
       hanzis.push(body);
       World.add(world, body);
     });
@@ -206,7 +205,7 @@
       let pairs = e.pairs;
       for (let pair of pairs) {
         let a = pair.bodyA, b = pair.bodyB;
-        if (a.text && b.text) {
+        if (a.text && b.text && a.position.y > indicator && b.position.y > indicator) {
           mergeHanzi(a, b);
         }
       }
