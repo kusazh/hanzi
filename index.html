@@ -19,7 +19,7 @@
       color: black;
       line-height: 1;
       text-align: center;
-      text-underline-offset: 5px;
+      text-decoration: none;
       outline-offset: -10px;
     }
 
@@ -40,6 +40,10 @@
       justify-content: space-between;
     }
 
+    img {
+      width: 25.6px;
+    }
+
     @media (prefers-color-scheme: dark) {
       body {
         background-color: black;
@@ -51,6 +55,10 @@
 
       button {
         color: initial;
+      }
+
+      img {
+        filter: invert(100%);
       }
     }
   </style>
@@ -68,22 +76,24 @@
   </header>
   <canvas id="game"></canvas>
   <footer>
-    <a href="../me">張苦洒</a>
+    <a href="../me"><img src="../images/logo.svg" alt="Logo" /></a>
   </footer>
   <script src="https://cdn.jsdelivr.net/npm/matter-js@latest/build/matter.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/opentype.js@latest/dist/opentype.min.js"></script>
   <script>
-    // TODO: 字典，字号，游戏结束，计算最大汉字
+    // TODO: 游戏结束，计算最大汉字
     const { Body, Bodies, Composite, Engine, Events, Render, Runner, Svg, World } = Matter;
 
     const thickness = 20;
     const w = Math.min(window.innerWidth, 400);
     const h = w * 1.6;
     const indicator = w * 0.2;
+    const delta = w * 0.015;
     let font, preview;
     let bColor = "white";
     let fColor = "black";
     let hanzis = [];
+    let dict = {};
     let svgs = {};
 
     if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
@@ -119,6 +129,11 @@
     const wallR = Bodies.rectangle(w, h / 2, thickness, h, { isStatic: true, render: { visible: false } });
     World.add(world, [ground, wallL, wallR]);
 
+    fetch("./dictionary.json")
+      .then(response => response.json())
+      .then(json => dict = json)
+      .catch(err => console.error(err));
+
     // TODO: loading
     opentype.load("./SourceHanSerifTC-Heavy.otf", function (err, f) {
       if (err) return console.error(err);
@@ -135,7 +150,7 @@
     });
 
     function genSvg(text) {
-      const path = font.getPath(text, 0, 0, indicator);
+      const path = font.getPath(text, 0, 0, indicator / 2 + delta * dict[text]);
       let minX = 0, minY = 0, maxX = 0, maxY = 0;
 
       path.commands.forEach(cmd => {
@@ -200,9 +215,12 @@
     }
 
     canvas.addEventListener("pointerdown", e => {
+      if (!font || !dict) return;
       const x = (e.clientX - rect.left) * (w / rect.width);
       canvas.setPointerCapture(e.pointerId);
-      preview = genBody("我", x, null, true);
+      const keys = Object.keys(dict);
+      const index = Math.floor(Math.random() * keys.length);
+      preview = genBody(keys[index], x, null, true);
       World.add(world, preview);
     });
 
@@ -228,7 +246,7 @@
       for (let pair of pairs) {
         let a = pair.bodyA, b = pair.bodyB;
         if (a.text && b.text && a.position.y > indicator && b.position.y > indicator) {
-          mergeHanzi(a, b);
+          // mergeHanzi(a, b);
         }
       }
     });
