@@ -19,7 +19,6 @@
       color: black;
       line-height: 1;
       text-align: center;
-      text-decoration: none;
       outline-offset: -10px;
     }
 
@@ -36,11 +35,17 @@
 
     header {
       display: flex;
-      margin: 20px 10px 0px 10px;
+      margin: 20px 10px 5px 10px;
       justify-content: space-between;
     }
 
+    a {
+      margin-top: -2.5px;
+      text-underline-offset: 5px;
+    }
+
     img {
+      opacity: 0.2;
       width: 25.6px;
     }
 
@@ -68,11 +73,7 @@
   <h1>合成大漢字</h1>
   <header>
     <button id="btnReset">重開</button>
-    <a class="github-button" href="https://github.com/kusazh/hanzi"
-      data-color-scheme="no-preference: light; light: light; dark: dark;" data-icon="octicon-star"
-      aria-label="Star kusazh/hanzi on GitHub">
-      星
-    </a>
+    <a href="https://github.com/kusazh/hanzi"><small>源</small></a>
   </header>
   <canvas id="game"></canvas>
   <footer>
@@ -87,13 +88,16 @@
     const thickness = 20;
     const w = Math.min(window.innerWidth, 400);
     const h = w * 1.6;
-    const indicator = w * 0.2;
-    const delta = w * 0.015;
+    const indicator = w * 0.3;
+    const delta = w * 0.02;
+    // const radicals = ["一", "丨", "丿", "乀", "丶"];
+    const radicals = [];
     let font, preview;
     let bColor = "white";
     let fColor = "black";
-    let hanzis = [];
-    let dict = {};
+    let zis = [];
+    let ziDict = {};
+    let partDict = {};
     let svgs = {};
 
     if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
@@ -131,7 +135,17 @@
 
     fetch("./dictionary.json")
       .then(response => response.json())
-      .then(json => dict = json)
+      .then(json => {
+        ziDict = json;
+        for (const [key, [_, parts]] of Object.entries(ziDict)) {
+          parts.forEach(part => {
+            partDict[part] = key;
+            for (const r of part) {
+              if (!(r in ziDict) || ziDict[r][0] < 5) radicals.push(r);
+            };
+          });
+        }
+      })
       .catch(err => console.error(err));
 
     // TODO: loading
@@ -139,18 +153,19 @@
       if (err) return console.error(err);
       font = f;
       // showcase
-      // hanzis = [
+      // zis = [
       //   genBody("合", w / 2, null),
       //   genBody("成", w / 2, null),
       //   genBody("大", w / 2, null),
       //   genBody("漢", w / 2, null),
       //   genBody("字", w / 2, null),
       // ];
-      // World.add(world, hanzis);
+      // World.add(world, zis);
     });
 
     function genSvg(text) {
-      const path = font.getPath(text, 0, 0, indicator / 2 + delta * dict[text]);
+      const stroke = (text in ziDict) ? ziDict[text][0] : 1;
+      const path = font.getPath(text, 0, 0, indicator / 2 + delta * stroke);
       let minX = 0, minY = 0, maxX = 0, maxY = 0;
 
       path.commands.forEach(cmd => {
@@ -172,7 +187,7 @@
       `;
       const mediaType = "image/svg+xml";
       const doc = new DOMParser().parseFromString(svgString, mediaType);
-      const vertices = Svg.pathToVertices(doc.querySelector("path"), 15);
+      const vertices = Svg.pathToVertices(doc.querySelector("path"), 2);
       const svgBlob = new Blob([svgString], { type: mediaType });
       const svgUrl = URL.createObjectURL(svgBlob);
       return [bodyW, bodyH, vertices, svgUrl];
@@ -204,23 +219,26 @@
       return x;
     }
 
-    function mergeHanzi(a, b) {
+    function mergeZi(a, b) {
+      console.log()
+      const newZi = partDict[a.text + b.text] || partDict[b.text + a.text];
+      if (!newZi) return;
       const x = (a.position.x + b.position.x) / 2;
       const y = (a.position.y + b.position.y) / 2;
-      let body = genBody("你", x, y);
+      let body = genBody(newZi, x, y);
       World.remove(world, [a, b]);
-      hanzis = hanzis.filter(f => f !== a && f !== b);
-      hanzis.push(body);
+      zis = zis.filter(f => f !== a && f !== b);
+      zis.push(body);
       World.add(world, body);
     }
 
     canvas.addEventListener("pointerdown", e => {
-      if (!font || !dict) return;
+      if (!font || !ziDict) return;
       const x = (e.clientX - rect.left) * (w / rect.width);
       canvas.setPointerCapture(e.pointerId);
-      const keys = Object.keys(dict);
+      const keys = Object.keys(radicals);
       const index = Math.floor(Math.random() * keys.length);
-      preview = genBody(keys[index], x, null, true);
+      preview = genBody(radicals[index], x, null, true);
       World.add(world, preview);
     });
 
@@ -237,7 +255,7 @@
       let body = genBody(preview.previewText, x, null);
       World.remove(world, preview);
       preview = null;
-      hanzis.push(body);
+      zis.push(body);
       World.add(world, body);
     });
 
@@ -246,15 +264,15 @@
       for (let pair of pairs) {
         let a = pair.bodyA, b = pair.bodyB;
         if (a.text && b.text && a.position.y > indicator && b.position.y > indicator) {
-          // mergeHanzi(a, b);
+          mergeZi(a, b);
         }
       }
     });
 
     document.getElementById("btnReset").onclick = () => {
-      hanzis.forEach(b => World.remove(world, b));
+      zis.forEach(b => World.remove(world, b));
       Object.values(svgs).forEach(data => URL.revokeObjectURL(data[3]));
-      hanzis = [];
+      zis = [];
       svgs = {};
     };
   </script>
