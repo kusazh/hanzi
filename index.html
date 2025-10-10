@@ -34,7 +34,7 @@
 
       header {
         display: flex;
-        margin: 20px 10px 5px 10px;
+        margin: 10px 10px 5px 10px;
         justify-content: space-between;
       }
 
@@ -45,10 +45,6 @@
         flex-direction: column;
         justify-content: center;
         position: fixed;
-      }
-
-      div img {
-        width: unset;
       }
 
       a {
@@ -66,6 +62,10 @@
           background-color: black;
         }
 
+        div {
+          background-color: rgba(0, 0, 0, 0.8);
+        }
+
         body * {
           color: white;
         }
@@ -74,7 +74,7 @@
           color: initial;
         }
 
-        img {
+        footer img {
           filter: invert(100%);
         }
       }
@@ -87,7 +87,7 @@
       <button id="reset">重開</button>
       <span id="score"></span>
     </header>
-    <div id="cover"><p id="notice">靜候</p></div>
+    <div id="cover"><p>靜候</p></div>
     <canvas id="game"></canvas>
     <footer>
       <a href="../me"><img src="../images/logo.svg" alt="Logo" /></a>
@@ -95,17 +95,8 @@
     <script src="https://cdn.jsdelivr.net/npm/matter-js@latest/build/matter.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/opentype.js@latest/dist/opentype.min.js"></script>
     <script>
-      const {
-        Body,
-        Bodies,
-        Composite,
-        Engine,
-        Events,
-        Render,
-        Runner,
-        Svg,
-        World,
-      } = Matter;
+      const { Body, Bodies, Composite, Engine, Events, Render, Runner, World } =
+        Matter;
 
       const thickness = 20;
       const w = Math.min(window.innerWidth, 400);
@@ -127,6 +118,8 @@
       }
 
       const cover = document.getElementById("cover");
+      const title = document.getElementById("title");
+      const score = document.getElementById("score");
       const canvas = document.getElementById("game");
       const rect = canvas.getBoundingClientRect();
       cover.style.width = `${w}px`;
@@ -151,12 +144,6 @@
       });
       Render.run(render);
       Runner.run(Runner.create(), engine);
-
-      const options = { isStatic: true, render: { visible: false } };
-      const ground = Bodies.rectangle(w / 2, h, w, thickness, options);
-      const wallL = Bodies.rectangle(0, h / 2, thickness, h, options);
-      const wallR = Bodies.rectangle(w, h / 2, thickness, h, options);
-      World.add(world, [ground, wallL, wallR]);
 
       fetch("./dictionary.json")
         .then((response) => response.json())
@@ -183,10 +170,10 @@
         })
         .catch((err) => console.error(err));
 
-      // TODO: loading
       opentype.load("./SourceHanSerifTC-Heavy.otf", function (err, f) {
         if (err) return console.error(err);
         font = f;
+        initWorld();
         // showcase
         // zis = [
         //   genBody("合", w / 2),
@@ -196,8 +183,29 @@
         //   genBody("字", w / 2),
         // ];
         // World.add(world, zis);
-        cover.style.display = "none";
       });
+
+      function initWorld() {
+        Composite.clear(world, false);
+        const options = { isStatic: true, render: { visible: false } };
+        const ground = Bodies.rectangle(w / 2, h, w, thickness, options);
+        const wallL = Bodies.rectangle(0, h / 2, thickness, h, options);
+        const wallR = Bodies.rectangle(w, h / 2, thickness, h, options);
+        World.add(world, [ground, wallL, wallR]);
+
+        zis.length = 0;
+        preview = best = timer = null;
+        title.innerText = "合成大漢字";
+        score.innerText = "alpha 0.1";
+        cover.style.display = "none";
+        while (cover.children.length > 1) {
+          cover.removeChild(cover.lastChild);
+        }
+        for (const [key, data] of Object.entries(svgs)) {
+          delete svgs[key];
+          URL.revokeObjectURL(data[3]);
+        }
+      }
 
       function genSvg(text) {
         const stroke = text in ziDict ? ziDict[text][0] : 0;
@@ -291,13 +299,11 @@
         World.add(world, body);
 
         const newstroke = ziDict[newZi][0];
-        const score = document.getElementById("score");
         score.innerText = (parseInt(score.innerText) || 0) + newstroke;
         if (!best || newstroke > best[1]) best = [newZi, newstroke];
       }
 
       function checkGameOver() {
-        const title = document.getElementById("title");
         const isTriggered = zis.some(
           (zi) => zi.position.y < indicator / 2 - thickness / 2
         );
@@ -307,8 +313,7 @@
             timer = setTimeout(() => {
               title.innerText = "局終";
               cover.style.display = "flex";
-              const notice = document.getElementById("notice");
-              const score = document.getElementById("score");
+              const notice = cover.firstChild;
               if (best) {
                 notice.innerText = "最大漢字";
                 const img = document.createElement("img");
@@ -377,17 +382,10 @@
             mergeZi(a, b);
           }
         }
-        checkGameOver();
+        if (title.innerText !== "局終") checkGameOver();
       });
 
-      document.getElementById("reset").onclick = () => {
-        zis.forEach((b) => World.remove(world, b));
-        zis.length = 0;
-        for (const [key, data] of Object.entries(svgs)) {
-          delete svgs[key];
-          URL.revokeObjectURL(data[3]);
-        }
-      };
+      document.getElementById("reset").onclick = initWorld;
     </script>
     <script async defer src="https://buttons.github.io/buttons.js"></script>
   </body>
