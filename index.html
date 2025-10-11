@@ -3,6 +3,16 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta
+      name="theme-color"
+      media="(prefers-color-scheme: light)"
+      content="#ffffff"
+    />
+    <meta
+      name="theme-color"
+      media="(prefers-color-scheme: dark)"
+      content="#000000"
+    />
     <title>合成大漢字</title>
     <style>
       body {
@@ -11,6 +21,7 @@
         margin: 0 auto;
         max-width: 100%;
         touch-action: none;
+        overflow: hidden;
         width: 400px;
       }
 
@@ -101,8 +112,8 @@
       const thickness = 20;
       const w = Math.min(window.innerWidth, 400);
       const h = w * 1.6;
-      const indicator = w * 0.2;
-      const delta = indicator * 0.1;
+      const indicator = w / 5;
+      const delta = indicator / 10;
       const partDict = {};
       const svgs = {};
       const radicals = [];
@@ -116,6 +127,13 @@
         bColor = "black";
         fColor = "white";
       }
+      const levelColors = {
+        0: "grey",
+        1: fColor,
+        2: "orange",
+        3: "darkRed",
+        4: "purple",
+      };
 
       const cover = document.getElementById("cover");
       const title = document.getElementById("title");
@@ -128,11 +146,11 @@
       canvas.height = h;
       canvas.style.outline = "1px solid grey";
 
-      let engine = Engine.create();
-      let world = engine.world;
+      const engine = Engine.create();
+      const world = engine.world;
       world.gravity.y = 1;
 
-      let render = Render.create({
+      const render = Render.create({
         canvas: canvas,
         engine: engine,
         options: {
@@ -170,7 +188,7 @@
         })
         .catch((err) => console.error(err));
 
-      opentype.load("./SourceHanSerifTC-Heavy.otf", function (err, f) {
+      opentype.load("./SourceHanSerifTC-Heavy-Subset.otf", function (err, f) {
         if (err) return console.error(err);
         font = f;
         initWorld();
@@ -196,7 +214,7 @@
         zis.length = 0;
         preview = best = timer = null;
         title.innerText = "合成大漢字";
-        score.innerText = "alpha 0.1";
+        score.innerText = "0.2 beta";
         cover.style.display = "none";
         while (cover.children.length > 1) {
           cover.removeChild(cover.lastChild);
@@ -207,9 +225,11 @@
         }
       }
 
-      function genSvg(text) {
+      function genSvg(text, level) {
+        if (text + level in svgs) return svgs[text + level];
         const stroke = text in ziDict ? ziDict[text][0] : 0;
         const path = font.getPath(text, 0, 0, indicator / 2 + delta * stroke);
+        const levelColor = levelColors[level];
         let minX = 0,
           minY = 0,
           maxX = 0,
@@ -228,11 +248,11 @@
         const bodyW = maxX - minX;
         const bodyH = maxY - minY;
         // prettier-ignore
-        const svgString = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX} ${minY} ${bodyW} ${bodyH}" width="${bodyW}" height="${bodyH}"><path d="${path.toPathData(2)}" fill="${fColor}"/></svg>`;
+        const svgString = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX} ${minY} ${bodyW} ${bodyH}" width="${bodyW}" height="${bodyH}"><path d="${path.toPathData(2)}" fill="${levelColor}"/></svg>`;
         const mediaType = "image/svg+xml";
         const doc = new DOMParser().parseFromString(svgString, mediaType);
         const DOMPath = doc.querySelector("path");
-        let vertices = [];
+        const vertices = [];
         // chrome unsupported:
         // const vertices = Svg.pathToVertices(doc.querySelector("path"), 2);
         const total = DOMPath.getTotalLength();
@@ -243,23 +263,19 @@
         }
         const svgBlob = new Blob([svgString], { type: mediaType });
         const svgUrl = URL.createObjectURL(svgBlob);
-        return [bodyW, bodyH, vertices, svgUrl];
+        svgs[text + level] = [bodyW, bodyH, vertices, svgUrl];
+        return svgs[text + level];
       }
 
       function genBody(
         text,
         x,
-        { y = null, isPreview = false, isMerged = false } = {}
+        { y = null, isPreview = false, level = 0 } = {}
       ) {
-        let vertices, svgUrl;
-        if (text in svgs) {
-          [bodyW, bodyH, vertices, svgUrl] = svgs[text];
-        } else {
-          svgs[text] = [bodyW, bodyH, vertices, svgUrl] = genSvg(text);
-        }
+        const [bodyW, bodyH, vertices, svgUrl] = genSvg(text, level);
         x = checkX(x, bodyW);
         y = y ?? bodyH / 2 + thickness / 2;
-        let body = Bodies.fromVertices(
+        const body = Bodies.fromVertices(
           x,
           y,
           vertices,
@@ -268,14 +284,12 @@
             isSensor: isPreview,
             restitution: 0.2,
             friction: 0.1,
-            render: {
-              sprite: { texture: svgUrl },
-              opacity: isMerged ? 1 : 0.5,
-            },
+            render: { sprite: { texture: svgUrl } },
           },
           true
         );
         body[isPreview ? "previewText" : "text"] = text;
+        body.level = level;
         return body;
       }
 
@@ -289,18 +303,21 @@
         const newZis = partDict[a.text + b.text] || partDict[b.text + a.text];
         if (!newZis) return;
         const newZi = newZis[Math.floor(Math.random() * newZis.length)];
+        const newstroke = ziDict[newZi][0];
+        const newLevel = a.level + b.level + 1;
         const x = (a.position.x + b.position.x) / 2;
         const y = (a.position.y + b.position.y) / 2;
-        let body = genBody(newZi, x, { y: y, isMerged: true });
+        const body = genBody(newZi, x, { y: y, level: newLevel });
         World.remove(world, [a, b]);
         zis.splice(zis.indexOf(a), 1);
         zis.splice(zis.indexOf(b), 1);
         zis.push(body);
         World.add(world, body);
 
-        const newstroke = ziDict[newZi][0];
-        score.innerText = (parseInt(score.innerText) || 0) + newstroke;
-        if (!best || newstroke > best[1]) best = [newZi, newstroke];
+        score.innerText =
+          (parseInt(score.innerText) || 0) +
+          Math.floor(newstroke ** (newLevel / 2 + 1));
+        if (!best || newstroke > best[1]) best = [newZi + newLevel, newstroke];
       }
 
       function checkGameOver() {
@@ -328,7 +345,7 @@
                 cover.appendChild(p1);
                 cover.appendChild(p2);
               } else {
-                notice.innerText = "竟有一貧者哉";
+                notice.innerText = "一貧如洗";
               }
             }, 2000);
           }
@@ -350,7 +367,7 @@
 
       canvas.addEventListener("pointermove", (e) => {
         if (!preview) return;
-        const bodyW = svgs[preview.previewText][0];
+        const bodyW = svgs[preview.previewText + preview.level][0];
         const x = checkX(
           (e.clientX - canvas.offsetLeft) * (w / rect.width),
           bodyW
@@ -361,7 +378,7 @@
       canvas.addEventListener("pointerup", (e) => {
         if (!preview) return;
         const x = (e.clientX - canvas.offsetLeft) * (w / rect.width);
-        let body = genBody(preview.previewText, x);
+        const body = genBody(preview.previewText, x);
         World.remove(world, preview);
         preview = null;
         zis.push(body);
@@ -369,9 +386,9 @@
       });
 
       Events.on(engine, "collisionStart", (e) => {
-        let pairs = e.pairs;
-        for (let pair of pairs) {
-          let a = pair.bodyA,
+        if (title.innerText === "局終") return;
+        for (const pair of e.pairs) {
+          const a = pair.bodyA,
             b = pair.bodyB;
           if (
             a.text &&
@@ -382,7 +399,7 @@
             mergeZi(a, b);
           }
         }
-        if (title.innerText !== "局終") checkGameOver();
+        checkGameOver();
       });
 
       document.getElementById("reset").onclick = initWorld;

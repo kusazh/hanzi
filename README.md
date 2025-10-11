@@ -1,5 +1,17 @@
 # Hanzi Suika Game 合成大漢字
 
+https://github.com/user-attachments/assets/044e8733-4973-4495-b7cd-1932fd0d3214
+
+## Changelog
+
+### 0.2
+- Use font subset to reduce size.
+- Add theme color for PWA.
+- New level-up and scoring rule.
+
+### 0.1
+- First release.
+
 ## Acknowledgements
 
 - [CHISE](https://www.chise.org)
