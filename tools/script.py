@@ -3,11 +3,11 @@ import re
 import subprocess
 
 
-with open("./dict_mini.json", encoding="utf-8") as f:
+with open("./tools/dict_mini.json", encoding="utf-8") as f:
     d = json.load(f)
 
 ids = {}
-with open("./ids.txt", encoding="utf-8") as f:
+with open("./tools/ids.txt", encoding="utf-8") as f:
     for line in f.readlines():
         _, z, *parts_ = line.strip().split("\t")
         parts = []
@@ -96,6 +96,7 @@ patch = {
     "糸": (6, ["小幺"]),
     "虫": (6, ["口厶"]),
     "羊": (6, ["䒑艹"]),
+    "百": (6, ["卜日"]),
     "身": (7, ["身"]),
     "車": (7, ["二申", "艹田"]),
     "酉": (7, ["兀日"]),
@@ -109,7 +110,7 @@ patch = {
     "東": (8, ["日木"]),
     "隹": (8, ["人圭"]),
     "直": (8, ["十目"]),
-    "頁": (9, ["十貝"]),
+    "頁": (9, ["卜貝"]),
     "重": (9, ["千里"]),
 }
 
@@ -167,7 +168,7 @@ replacements = {
     "王": "壬",
 }
 
-output = "../dictionary.json"
+output = "./dictionary.json"
 with open(output, mode="w", encoding="utf-8") as f:
     for k, v in replacements.items():
         for ch in v:
@@ -187,9 +188,9 @@ font_name = "SourceHanSerifTC-Heavy"
 subprocess.run(
     [
         "pyftsubset",
-        f"{font_name}.otf",
+        f"./tools/{font_name}.otf",
         f"--text-file={output}",
-        f"--output-file=../{font_name}-Subset.otf",
+        f"--output-file=./{font_name}-Subset.otf",
     ],
     check=True,
 )
