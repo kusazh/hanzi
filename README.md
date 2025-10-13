@@ -4,6 +4,10 @@ https://github.com/user-attachments/assets/044e8733-4973-4495-b7cd-1932fd0d3214
 
 ## Changelog
 
+### 0.3
+- Open source dictionary-generating tools.
+- Revise parts (unfinished).
+
 ### 0.2
 - Use font subset to reduce size.
 - Add theme color for PWA.
