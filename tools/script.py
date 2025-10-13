@@ -17,9 +17,6 @@ with open("./ids.txt", encoding="utf-8") as f:
                     continue
             cleaned = re.sub(r"[⿰⿱⿲⿳⿴⿵⿶⿷⿸⿹⿺⿻\[\]A-Z\n]", "", p)
             parts.append(cleaned)
-        # 3x = 2x
-        if len(parts) == 3 and parts[0] == parts[1] == parts[2]:
-            parts = parts[:2]
         if strike := d.get(z):
             ids[z] = [strike, parts]
 
@@ -73,7 +70,7 @@ patch = {
     "目": (5, ["日一", "口二"]),
     "戊": (5, ["丿戈"]),
     "申": (5, ["日丨", "十口"]),
-    "本": (5, ["木一"]),
+    "本": (5, ["木一", "大十"]),
     "瓜": (5, ["爪人"]),
     "示": (5, ["二小"]),
     "生": (5, ["牛一"]),
@@ -170,7 +167,7 @@ replacements = {
     "王": "壬",
 }
 
-output = "../bulid/dictionary.json"
+output = "../dictionary.json"
 with open(output, mode="w", encoding="utf-8") as f:
     for k, v in replacements.items():
         for ch in v:
@@ -192,7 +189,7 @@ subprocess.run(
         "pyftsubset",
         f"{font_name}.otf",
         f"--text-file={output}",
-        f"--output-file=../bulid/{font_name}-Subset.otf",
+        f"--output-file=../{font_name}-Subset.otf",
     ],
     check=True,
 )
